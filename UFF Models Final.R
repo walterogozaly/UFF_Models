@@ -43,25 +43,59 @@ setwd("J:/Data Services/Practicum Student Folder/Data")
 
 #################       Loading Data       #################
 
-# Imports as data table. Make sure to convert to data frame. 
+# Imports as data table. 
 # The fread command is being used here becuase read_excel had memory issues.
-myData = fread("JOINED_EXPORT_20210215.csv", header = TRUE)
+myData = fread("JOINED_EXPORT_UPDATE_20210409.csv", header = TRUE)
 
 # The above returns Warning: package 'bit64' may be needed to prevent some integer columns from printing as nonsense.
 # The integers print just fine when I run the head() command, so I am not taking their advice for the time being.
 
 backup = myData
-#myData = backup
 
 # fread returns a data table, so we convert it to a data frame.
 myData <- as.data.frame(myData)
 
-# Informational commands for reference
-dim(myData) ## 291 variables,  520,458 observations
+# Let's get some preliminary info on our data.
+#dim(myData) ## 291 variables,  520,458 observations
 #head(myData)
 #str(myData, list.len = ncol(myData))
-colnames(myData)
+#colnames(myData)
 
+###### IMPORTING CLICK DATA #######
+
+# This reads in any weekly Advancement Files. Just drop them in the
+# relevant folder and it'll be included in the data frame.
+clickDataTable <- 
+  list.files(pattern = "Advancement_University_of_Florida_weekly.*.csv") %>%
+  map_df(~fread(.))
+
+# We only need ID_NUMBER and TOTAL_VISITS columns.
+clickDataTable = clickDataTable[,c(2,10)]
+
+colnames(clickDataTable) = c("ID_NUMBER", "TOTAL_VISITS") # For later merge
+
+dim(clickDataTable) # 38500 observations
+clickDistinct <- unique(clickDataTable$ID_NUMBER) 
+length(clickDistinct) # but only 21200 unique IDs in the list.
+
+# Summing total visits by ID.
+distinctClickData <- clickDataTable %>%
+  group_by(ID_NUMBER) %>%
+  transmute(TOTAL_VISITS_SUMMED = sum(TOTAL_VISITS))
+
+# This gets rid of duplicate ID rows. The previous code summed them,
+# but didn't remove the multiple instances of ID NUMBER.
+distinctClickData = distinctClickData[!duplicated(distinctClickData$ID_NUMBER), ]
+
+# The below two sums should match. 
+sum(clickDataTable$TOTAL_VISITS)
+sum(distinctClickData$TOTAL_VISITS_SUMMED)
+
+# Tidying up data; we're done here.
+clickDataTable = distinctClickData
+colnames(clickDataTable)[2] = "TOTAL_VISITS"
+
+# This click data will be merged with myData later.
 
 #################       Data Wrangling       #################
 
@@ -108,7 +142,8 @@ str(myData[, sapply(myData, class) == 'character']) # should return 0 variable d
 #####  DROPPING UNIMPORTANT COLUMNS PRE-MODELING  #####
 
 # Creating dummy variables at first crashed because some of our factors 
-# have thousands of levels but don't appear to be useful in any way.
+# have thousands of levels, despite little relevance to the model.
+
 # Getting rid of some of the unnecessary ones.
 drops <- c("BAR_INDEX", "FIRST_DEPT_DESC", "FIRST_FUND", 
   "FIRST_FUND_NAME", "LAST_DEPT_DESC", "LAST_FUND", "LAST_FUND_NAME", 
@@ -116,13 +151,10 @@ drops <- c("BAR_INDEX", "FIRST_DEPT_DESC", "FIRST_FUND",
   "COUNTY" )
 myData = myData[, !(names(myData) %in% drops )]
 
-# I'm also dropping columns with a 50-100 factors
-# if I don't know what they mean or they seem unimportant.
-# There is a very low chance that one of these would be important.
-iDontKnowWhatTheseMean <- c("FIRST_UNIT", "LAST_UNIT", "LARGEST_UNIT", 
+drops2 <- c("FIRST_UNIT", "LAST_UNIT", "LARGEST_UNIT", 
   "PRIMARY_UNIT_OF_GIVING", "INDUSTRY", "PRIM_UNIT", "PREF_SCHOOL_CODE",
   "STATE_CODE")
-myData = myData[, !(names(myData) %in% iDontKnowWhatTheseMean )]
+myData = myData[, !(names(myData) %in% drops2 )]
 
 # I'll also drop columns where the vast (95+%) of values are null.
 # These columns are also not very useful.
@@ -558,7 +590,7 @@ na_count %>% filter ( na_count == 0)
 # Calculate how frequently they donate by dividing
 # the time between the first and last gift by the number of gifts.
 myData$donationFrequencyInWeeks = (myData$weeksSinceFirstMFOSGift - 
-  myData$weeksSinceLastMFOSGift) / myData$GIFT_COUNT
+  myData$weeksSinceLastMFOSGift) / myData$MFOS_GIFT_COUNT
 
 # View frequency by year
 table(floor(myData$donationFrequencyInWeeks / 4))
@@ -573,28 +605,10 @@ myData$laggedAverageIntervalNow = replace_na(myData$laggedAverageIntervalNow, "N
 table(myData$laggedAverageIntervalNow) ## 351 yes as of Feb 27
 
 
-# Returns a data frame with only those who've donated within a month of this time last year. 
-# Mutates a new variable laggedYearDonationNow that is YES for all these filtered rows.
-donatedAYearAgo = oldDateColumns %>%
-  select(ID_NUMBER, GIFT_DATE_MR1, GIFT_DATE_MR2, GIFT_DATE_MR3, GIFT_DATE_MR4,
-  GIFT_DATE_MR5, GIFT_DATE_MR6, GIFT_DATE_MR7, GIFT_DATE_MR8, GIFT_DATE_MR9, GIFT_DATE_MR10) %>%
-  filter ( between( GIFT_DATE_MR1 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR2 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR3 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR4 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR5 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR6 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR7 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR8 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR9 + days(365), today() - days(28), today() + days(28)) |
-    between( GIFT_DATE_MR10 + days(365), today() - days(28), today() + days(28)) ) %>%
-    mutate(laggedYearDonationNow = "Yes")
-
-# Left join the people who donated a year ago with all people.
-myData <- merge(x=myData, y=donatedAYearAgo[,c(1,12)], by="ID_NUMBER",all.x=TRUE)
+myData$laggedYearDonationNow = ifelse( myData$weeksSinceLastMFOSGift - 52 < 5, "Yes", "No")
 myData$laggedYearDonationNow = replace_na(myData$laggedYearDonationNow, "No")
-table(myData$laggedYearDonationNow) # 17k yes at the moment.
 
+table(myData$laggedYearDonationNow ) ## 1041 yes as of March 28
 
 #####  CREATING THE COMBINED DEPENDENT VARIABLE  #####
 
@@ -603,7 +617,8 @@ table(myData$laggedYearDonationNow) # 17k yes at the moment.
 myData$likelyToDonateThisMonth = ifelse( myData$laggedYearDonationNow == "Yes" | 
   myData$laggedAverageIntervalNow == "Yes", "Yes", "No")
 
-table(myData$likelyToDonateThisMonth) # 17,300 YES at this point
+table(myData$likelyToDonateThisMonth) # 1200 YES after adjusting
+# for MFOS. 17,300 YES prior to this. 
 
 myData$likelyToDonateThisMonth = factor(myData$likelyToDonateThisMonth, levels=c("Yes", "No"))
 
@@ -619,26 +634,49 @@ myData = myData %>% select(-laggedYearDonationNow, -laggedAverageIntervalNow)
 ### likely to donate, we could see that as exposing the aforementioned
 ### incomplete-data people. Hope this makes sense.
 
+########   IDENTIFYING FIRST TIME DONORS      ########
 
-#####  BOXPLOTS  #####
+# We'll create a variable that represents whether the donor has never 
+# made a gift before, for MFOS specifically and then UF generally.
 
-#plot01 <- ggplot(data = trainingData %>% filter(!is.na(madeDonationLastMonth))) + 
-#  geom_boxplot(aes(x = madeDonationLastMonth, y = GIFT_COUNT), outlier.shape=NA) + 
-#  labs(title = "Number of Donations", subtitle = "Made Donation Last Month vs. No Donations") +
-#  ylim(0,10)
-#plot02 <- ggplot(data = trainingData %>% filter(!is.na(madeDonationLastMonth))) + 
-#  geom_boxplot(aes(x = madeDonationLastMonth, y = TOTALUF), outlier.shape=NA) + 
-#  labs(title = "Total Donated ($)", subtitle = "Made Donation Last Month vs. No Donations") + 
-#  ylim(0,2000)
-#plot03 <- ggplot(data = trainingData %>% filter(!is.na(madeDonationLastMonth))) + 
-#  geom_boxplot(aes(x = madeDonationLastMonth, y = weeksSinceFirstDonation), outlier.shape=NA) + 
-#  labs(title = "Weeks since First Donation", subtitle = "Made Donation Last Month vs. No Donations") +
-#  ylim(0,1000)
-#plot04 <- ggplot(data = trainingData %>% filter(!is.na(madeDonationLastMonth))) + 
-#  geom_boxplot(aes(x = madeDonationLastMonth, y = weeksSinceLastDonation), outlier.shape=NA) + 
-#  labs(title = "Weeks since Last Donation", subtitle = "Made Donation Last Month vs. No Donations") +
-#  ylim(0,1000)
-#grid.arrange(plot01, plot02, plot03, plot04, ncol = 2)
+myData$donatedToMFOS = ifelse( myData$MFOS_GIFT_COUNT == 0, 0, 1)
+
+myData$donatedToUF = ifelse ( myData$GIFT_COUNT == 0, 0, 1)
+
+########   REMOVING DONATION BASED DUMMY VARIABLES   #######
+
+# Because we are adding the dummy variables back for the 
+# purpose of identifying new donors who are likely to
+# donate, we are not going to use any dummy variables
+# that depend on / are only useful if the person has
+# already donated.
+
+# myDataDummied currently has 577 variables. Let's reduce that.
+
+# These cols represent allocation of first/largest gift.
+myDataDummied = myDataDummied[,-c(19:117)]
+
+# Cols for Gift_Type 1-10
+giftTypeCols = c(c(147:165), c(168:184), c(187:203), c(206:220), c(223:239),
+  c(242:256), c(259:276), c(279:293), c(296:311), c(314:328))
+
+myDataDummied = myDataDummied[, -giftTypeCols ]
+
+# Down to 314. I will remove more for lack of impact, 
+# but this is fine for now.
+
+# Removing MR{x}_FOS_IND_{N/Y} variables. They showed really high correlation
+# with a bunch of other variables.
+myDataDummied = myDataDummied[, -c(147:166)]
+
+# We'll also remove the touch type columns, as these don't really
+# describe the non-donors. They just describe how we 
+# approached them.
+myDataDummied = myDataDummied[, -c(147:290)]
+
+# Just checked -- none of the dummy variables have any NAs.
+# This checks out intuitively. 
+
 
 
 ########   MODEL TRAINING AND FINAL SUBSET    ########  
@@ -664,6 +702,13 @@ na_count %>% filter ( na_count == 0)
 # Subsetting for columns with 0 NAs.
 dataForModel = myData[, colSums(is.na(myData)) == 0]
 
+##### ADDING CLICKDATATABLE BACK IN    #######
+dataForModel <- merge(x=dataForModel, y=clickDataTable, by="ID_NUMBER",all.x=TRUE)
+
+colnames(dataForModel)
+sum(!is.na(dataForModel$TOTAL_VISITS)) #~10k IDs now have click data 
+
+dataForModel$TOTAL_VISITS = replace_na(dataForModel$TOTAL_VISITS, 0)
 
 #####  PREPROCESSING  ######
 
@@ -671,9 +716,17 @@ dataForModel = myData[, colSums(is.na(myData)) == 0]
 preProcValues <- preProcess(dataForModel, method = c("center", "scale"), na.remove=TRUE)
 myDataTransformed <- predict(preProcValues, dataForModel)
 
+# We need the ID_Number column not to be centered and scaled.
+# Because we're going to merge the dummy vars back in.
+myDataTransformed$ID_NUMBER = dataForModel$ID_NUMBER
+
 #myDataBackup = myData
 
 dataForModelScaled = myDataTransformed
+
+##### ADDING DUMMIES BACK IN    #######
+dataForModelScaled <- merge(x=dataForModelScaled, y=myDataDummied, by="ID_NUMBER",all.x=TRUE)
+
 
 
 ########   REMOVING CORRELATED & UNIMPORTANT (PER GLM+RF) VARS    ########  
@@ -686,6 +739,8 @@ removedForCor = c("GIFT_MR1", "LONGEST_CONSECUTIVE_STREAK",
   "GIFT_MR9", "ANY_EMP", "FIRST_AMOUNT", "TOTALUF", "MFOS_FIRST_AMOUNT",
   "donated2020")
 
+#removedForNotInt = c("likelyToDonateThisMonth","noDonationYet")
+
 # If the p-value is miserable or the random forest model said it was
 # unimportant, it's removed below.
 removedForUnimportance = c("VARSPORT", "CHILDALUM", "CREDCARD",
@@ -693,23 +748,84 @@ removedForUnimportance = c("VARSPORT", "CHILDALUM", "CREDCARD",
   "SEC_HOME", "FFF", "LIFEMEM", "madeDonationLastMonth",
   "madeDonationLastYear")
 
-removed = c(removedForCor, removedForUnimportance)
+dummyRemovedInsig = c("HQ_YN_N", "DR_PERFECT_YN", "AGE_CAT_25 AND UNDER", "CLASS_CAT_1940 and Earlier",
+  "HIGHEST_HH_RATING_A - $100M +", "REGION_San Antonio", "REGION_Detroit",
+  "CLASS_CAT_2011-present", "GENDER_N", "HIGH_DEG_R", "MARSTAT_Married at Death",
+  "REGION_Nevada", "REGION_Arizona (except Phoenix)", "SPRECTYP_UF and UFF Employees", 
+  "HIGH_DEG_ ", "MARSTAT_Deceased Spouse", "PRIZM_Upscale", "MARSTAT_Other",
+  "AGGR_ENT_CODE_UF and UFF Employees", "HIGH_DEG_A", "AGE_CAT_31-35",
+  "AGE_CAT_36-40", "AGE_CAT_41-45", "AGE_CAT_OVER 85", "CLASS_CAT_1941-1950",
+  "CLASS_CAT_1951-1960", "MARSTAT_Formerly Married", "PRIZM_Poor", "REGION_Austin",
+  "REGION_Denver Metro", "REGION_Greater Southern California", "REGION_Louisiana",
+  "REGION_Michigan (except Detroit)", "REGION_Monroe", 
+  "REGION_Ohio (except Cincinnati)", "REGION_Oregon", "REGION_San Diego",
+  "REGION_Seattle", "REGION_Upstate New York", "HIGHEST_HH_RATING_O - No Rating",
+  "HIGHEST_HH_RATING_C - $50M - $74,999,999", "HIGHEST_HH_RATING_D - $25M - $49,999,999",
+  "HIGHEST_HH_RATING_E - $10M - $24,999,999", "HIGHEST_HH_RATING_F - $5M - $9,999,999",
+  "HIGHEST_HH_RATING_G - $1M - $4,999,999", "REGION_Minnesota (except Minn,/St. Paul)",
+  "CAROUTRC", "PRIZM_Midscale", "RECCONTACT_1 to 2 years", "RECCONTACT_10 or more years",
+  "RECCONTACT_2 to 5 years", "RECCONTACT_5 to 10 years", "REGION_Boston", 
+  "REGION_Houston", "REGION_Massachusetts (except Boston)", "REGION_Phoenix",
+  "REGION_Missouri", "REGION_Los Angeles", "REGION_NC Highlands",
+  "REGION_Philadelphia", "REGION_Pittsburgh", "REGION_San Francisco Bay Metro",
+  "HIGH_DEG_C", "MARSTAT_Separated", "MARSTAT_Marital Status Unknown",
+  "HIGHEST_HH_RATING_B - $75M - $99,999,999", "SPRECTYP_Students", 
+  "HIGH_DEG_I", "REGION_Cincinnati", "HIGH_DEG_F", "REGION_Minneapolis/St. Paul",
+  "REGION_Kentucky", "REGION_Washington (except Seattle)", "REGION_Chicago",
+  "REGION_NC Research Triangle", "REGION_Charlotte", "REGION_Okeechobee",
+  "GENDER_U", "REGION_Naples", "REGION_North Central", "REGION_Trenton",
+  "REGION_Dallas", "REGION_Pensacola", "REGION_Ft. Myers", "MARSTAT_Partner (Significant Other)",
+  "REGION_Ft. Pierce", "REGION_Lake City", "REGION_Hernando/Citrus", "REGION_Brevard",
+  "REGION_Daytona", "MARSTAT_Widowed", "REGION_Atlanta Metro", "REGION_Sarasota/Manatee",
+  "HIGH_DEG_D", "REGION_Greater D.C.", "REGION_Tallahassee", "RECONTACT_7 to 11 months",
+  "AGE_CAT_81-85", "REGION_St. Pete/Clearwater", "REGION_New York City Metropolitan",
+  "SPRECTYP_Family", "REGION_unassigned", "AGE_CAT_61-65", "AGE_CAT_66-70",
+  "AGE_CAT_56-60", "AGE_CAT_51-55", "AGE_CAT_46-50"
+  )
+
+# Toggle this one if you'd like to run a model identifying first time donors.
+# It will force the model to rely only on gift-independent variables.
+donationDependent = c("ADJ_AM1STGT", "CURCONSEC", "VELOCITY", "RFM_SCORE",
+  "GIFT_MR2", "GIFT_MR3", "GIFT_MR4", "GIFT_MR5", "GIFT_MR6", "GIFT_MR7",
+  "GIFT_MR8", "GIFT_MR10", "MFOS_TOTAL_COMMIT", "MFOS_GIFT_COUNT",
+  "MFOS_LAST_AMOUNT", "MFOS_TOTAL_YEARS", "GIFT_COUNT", "LAST_AMOUNT", 
+  "LARGEST_AMOUNT", "TOTAL_YEARS", "donationsWithinMonth", "donated2021",
+  "donated2019", "donated2018", "donated2017", "donated2016", "donated2015",
+  "madeDonationLastSixMonths", "MFOS_TOTAL_COMMIT_RANGE_ ", "TOTAL_COMMIT_RANGE_ " )
+
+# Toggle this to overwrite donationDependent if you're running
+# the ALL DONORS model.
+#donationDependent = c()
+
+# These were the least predictive variables on our final random forest model
+# run. (Regarding our first time donor model).
+finalRFremoved = c("REGION_Polk", "HIGHEST_HH_RATING_H - $500,000 - $999,999",
+  "REGION_Panama City", "REGION_Ocala", "MARSTAT_Divorced", "RECCONTACT_7 to 11 months",
+  "AGE_CAT_76-80", "REGION_Miami", "REGION_Ft. Lauderdale", "REGION_Orlando",
+  "REGION_Palm Beach", "PRIZM_LowerMid", "MARSTAT_Single", "HIGH_DEG_P",
+  "AGE_CAT_26-30", "EXECJOB", "PRIZM_UpperMid", "CLASS_CAT_1971-1980",
+  "CLASS_CAT_2001-2010", "RECCONTACT_Last 6 months", "HIGH_DEG_M",
+  "CLASS_CAT_1991-2000", "CLASS_CAT_1981-1990", "REGION_Jacksonville",
+  "HIGHEST_HH_RATING_K - $50,000 - $99,999", "AGE_CAT_71-75", "DR_PERFECT_YN_N")
+
+removed = c(removedForCor, removedForUnimportance, dummyRemovedInsig,
+  donationDependent, finalRFremoved)
 
 dataForCorrelation = dataForCorrelation[, !(names(dataForCorrelation) %in% removed )]
 
 ## Calculate correlations among variables and print the correlations above .7.
 ## All correlations above .7 were removed.
-res <- cor(dataForCorrelation)
+res <- cor(dataForCorrelation[,-c(16)])  # use c(UPDATE THIS) if you didn't remove donation-dependent vars
 res_df <- as.data.frame(as.table(res))
 #colnames(res_df)
-res_df[ res_df$Freq > .7 & res_df$Freq < 1.00,]
+res_df[ res_df$Freq > .5 & res_df$Freq < 1.00,]
+
 
 ## This code ran a simple model that I used to compare two correlated vars p-values
 # and choose one for removal. I also consulted our first iteration random forest model's
 # variable importance graph.
 dataForModelOne = dataForModelScaled[, !(names(dataForModelScaled) %in% removed)]
-modelOne <- glm(likelyToDonateThisMonth ~.-ID_NUMBER, family = binomial(link="logit"), data = dataForModelOne ,
-  maxit = 100)
+modelOne <- glm(likelyToDonateThisMonth ~.-ID_NUMBER -donatedToMFOS, family = binomial(link="logit"), data = dataForModelOne ,  maxit = 100)
 summary(modelOne)
 with(summary(modelOne), 1 - deviance / null.deviance) # prints R, currently .45
 
@@ -728,12 +844,12 @@ table(lastMonth_trn$likelyToDonateThisMonth)
 table(lastMonth_tst$likelyToDonateThisMonth)
 # Proportions look good. Let's continue.
 
-
+# Commenting out LogReg and DTree for now.
 ########   LOGISTIC REGRESSION MODEL    ########  
 
 # GLM model on the likelyToDonateThisMonth training data. 
 ## Took 15 minutes to run.
-logreg_model <- train(likelyToDonateThisMonth~.-ID_NUMBER, data=lastMonth_trn,
+logreg_model <- train(likelyToDonateThisMonth~.-ID_NUMBER -donatedToMFOS, data=lastMonth_trn,
   method = "glm",
   family = "binomial",
   metric = "ROC",
@@ -792,6 +908,7 @@ lastMonth_tst_dtree$prob <- prob_dtree
 fancyRpartPlot(dtree_model$finalModel)
 
 
+
 ########   RANDOM FOREST MODEL    ########  
 
 mtry <- 1:3
@@ -806,7 +923,7 @@ lastMonth_trn <- lastMonth_trn[further_idx,]
 
 # Now running RF model with half the observations.
 # It ran successfully with half in 15 minutes.
-rf_model <- train(likelyToDonateThisMonth~.-ID_NUMBER, data = lastMonth_trn,
+rf_model <- train(likelyToDonateThisMonth~.-ID_NUMBER -donatedToMFOS -PERSCONT -OTHRCONT, data = lastMonth_trn,
                       method="rf",
                       metric="ROC",
                       tuneGrid = tunegrid,
@@ -826,6 +943,18 @@ prob_rf <- predict.train(object = rf_model, newdata = lastMonth_tst, type = "pro
 # and let's evaluate the model performance on the test data
 confusionMatrix(pred_rf, lastMonth_tst$likelyToDonateThisMonth)
 
+# Evaluate the model performance on FIRST TIME donors only.
+# Attach predictions to a new firstTimers data frame.
+firstTimers = lastMonth_tst
+firstTimers$rf_pred = pred_rf
+# Subset firstTimers to include only first-timers.
+
+# The reason this says "< 1" and not "== 0" is that this column was 
+# centered and scaled, so the former 0s are now -.24 or thereabouts.
+firstTimers = firstTimers[firstTimers$donatedToMFOS < 1,]
+confusionMatrix(firstTimers$rf_pred, firstTimers$likelyToDonateThisMonth)
+
+
 # lets find the important variables with VIF
 rfVarImp <- varImp(rf_model$finalModel)
 # rfVarImp <- arrange(rfVarImp, desc(Overall))
@@ -834,22 +963,164 @@ rfVarImp <- varImp(rf_model$finalModel)
 rfVarImp %>%
   mutate(Variable = factor(rownames(rfVarImp))) %>%
   ggplot(aes(x = reorder(Variable,desc(Overall)), y = Overall))+
-    geom_bar(stat = "identity")+
+    geom_bar(stat = "identity", fill = "#f36f21")+
     ylab("Importance of Variables in the rf model")+
     xlab("Overall importance VIF")+
     coord_flip()+
     scale_x_discrete(limits=rev)
+    #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 # This just flips the previous graph for a different look.
 rfVarImp %>%
   mutate(Variable = factor(rownames(rfVarImp))) %>%
   ggplot(aes(x = reorder(Variable,(Overall)), y = Overall))+
-    geom_bar(stat = "identity")+
-    ylab("Importance of Variables in the rf model")+
-    xlab("Overall importance VIF")+
+    geom_bar(stat = "identity", fill = "#f36f21")+
+    ylab("Variable Importance")+
+    xlab("Variable Name")+
     #coord_flip()+
     scale_x_discrete(limits=rev)+
-    theme(axis.text = element_text(angle = 90))
+    theme(axis.text = element_text(angle = 90),
+      panel.border = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.background = element_rect(fill = "white")
+   )
 
 
 table(rfVarImp$Overall)
+
+#####   3/28/21 VISUALIZATIONS     ######
+
+# This info is for infographic purposes. I'm passing on %s to teammates.
+theSelected = firstTimers[firstTimers$rf_pred == "Yes",]
+
+theSelectedBackup = theSelected
+firstTimersBackup = firstTimers
+
+# I want the data that is not centered and scaled. I'm filtering the
+# pre-scaled data by the ID numbers of the selected.
+theSelected = dataForModel[dataForModel$ID_NUMBER %in% theSelected$ID_NUMBER, ]
+firstTimers = dataForModel[dataForModel$ID_NUMBER %in% firstTimers$ID_NUMBER, ]
+
+# Now we just have to remerge the dummy vars, which were added after centering
+# and scaling and thus aren't in dataForModel yet.
+theSelected <- merge(x=theSelected, y=myDataDummied, by="ID_NUMBER",all.x=FALSE)
+firstTimers <- merge(x=firstTimers, y=myDataDummied, by="ID_NUMBER",all.x=FALSE)
+
+table(theSelected$CURMEM)
+table(firstTimers$CURMEM)
+
+table(theSelected$donatedToUF)
+table(firstTimers$donatedToUF)
+
+table(theSelected$`SPRECTYP_Other Alumni`)
+table(firstTimers$`SPRECTYP_Other Alumni`)
+
+table(theSelected$RETIRED)
+table(firstTimers$RETIRED)
+
+table(theSelected$LINKEDREL)
+table(firstTimers$LINKEDREL)
+
+mean(theSelected$LINKEDREL)
+mean(firstTimers$LINKEDREL)
+
+table(theSelected$MARSTAT_Married)
+table(firstTimers$MARSTAT_Married)
+
+mean(theSelected$NUMCHILD)
+mean(firstTimers$NUMCHILD)
+
+mean(theSelected$TOTRE)
+mean(firstTimers$TOTRE)
+
+table(theSelected$FRATSOR)
+table(firstTimers$FRATSOR)
+
+table(theSelected$GENDER_M)
+table(firstTimers$GENDER_M)
+
+table(theSelected$TOTAL_VISITS > 0)
+table(firstTimers$TOTAL_VISITS > 0)
+
+mean(theSelected$TOTAL_VISITS)
+mean(firstTimers$TOTAL_VISITS)
+
+
+table(theSelected$CLASS_CAT_1961-1970)
+table(firstTimers$CLASS_CAT_1961-1970)
+
+table(theSelected$ACT_EMP)
+table(firstTimers$ACT_EMP)
+
+
+#####  BOXPLOTS  #####
+
+plot01 <- ggplot(data = lastMonth_trn) + 
+  geom_boxplot(aes(x = likelyToDonateThisMonth, y = RFM_SCORE), outlier.shape=NA) + 
+  labs(title = "RFM_SCORE") +
+  ylim(0,6)
+plot02 <- ggplot(data = lastMonth_trn) + 
+  geom_boxplot(aes(x = likelyToDonateThisMonth , y = GIFT_COUNT), outlier.shape=NA) + 
+  labs(title = "Total Gift Count") + 
+  ylim(0,4)
+plot03 <- ggplot(data = lastMonth_trn) + 
+  geom_boxplot(aes(x = likelyToDonateThisMonth , y = CURCONSEC), outlier.shape=NA) + 
+  labs(title = "CurConSec") +
+  ylim(0,3)
+plot04 <- ggplot(data = lastMonth_trn) + 
+  geom_boxplot(aes(x = likelyToDonateThisMonth , y = GIFT_MR3), outlier.shape=NA) + 
+  labs(title = "Third Gift Amount") +
+  ylim(0,.035)
+grid.arrange(plot01, plot02, plot03, plot04, ncol = 2)
+
+
+
+##### K NEAREST NEIGHBORS #####
+
+library(class)
+
+k_targetCat = lastMonth_trn[,15]
+k_train = lastMonth_trn[,-c(9,10, 16, 1)] # col 15 is likelyToDonateThisMonth
+k_test = lastMonth_tst[,-c(9,10, 16, 1)]
+
+
+#myk <- knn(k_train, k_test, cl=k_targetCat, k=5)
+
+#tab <- table(myk,k_targetCat)
+
+#svm(likelyToDonateThisMonth ~ ., data=k_train)
+
+
+#####  OTHER VISUALIZATIONS  ######
+
+totReGraph <- lastMonth_trn[c(1:2500),] %>% ggplot(aes(x=RFM_SCORE,y=TOTRE))+ 
+     geom_jitter(size=2, alpha=0.8, color="salmon3") + 
+     labs(title="Real Estate Value plotted with RFM Score", 
+     x = "RFM Score (Recency, Frequency, Money)", y = "Total Real Estate Value") + 
+     theme(axis.title = element_text()) +
+     geom_smooth(method='lm', formula=y~x) +
+     ylim(0,5)
+
+totReGraph 
+
+ggsave("finalVisualizationZZZ.png")
+
+
+graph2 <- lastMonth_trn[c(1:2500),] %>% ggplot(aes(x=GIFT_COUNT,y=LARGEST_AMOUNT))+ 
+     geom_jitter(size=2, alpha=0.8, color="darkseagreen4") + 
+     labs(title="Largest Gift Amount plotted with Total Gift Count", 
+     x = "Total Gift Count", y = "Largest Amount") + 
+     theme(axis.title = element_text()) +
+     geom_smooth(method='lm', formula=y~x) +
+     ylim(0,10) + xlim(0,10)
+
+ggsave("finalVisualizationBBB.png")
+
+
+
+
+
+
+
+
