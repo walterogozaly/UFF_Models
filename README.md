@@ -1,12 +1,6 @@
-UF Foundation Modeling Team
+# University of Florida Advancement — Modeling Team
 
-Walter Ogozaly	
-
-Maria Arias
-
-Alexander Real
-
-Madison Kaplan
+Walter Ogozaly, Maria Arias, Alexander Real, Madison Kaplan
 
 ### Data Description
 
@@ -16,7 +10,7 @@ This data is in Excel format and grouped weekly. It includes the date of any don
 
 #### Demographic and Alumni data (Joined_Export_*)	732 MB
 
-	The bulk of our data, representing roughly 500,000 alum households, of which half have donated to UF. This data includes demographics (income/region/sex/married) as well as information related to alum activities and past donations. 
+The bulk of our data, representing roughly 500,000 alum households, of which half have donated to UF. This data includes demographics (income/region/sex/married) as well as information related to alum activities and past donations. 
 
 Overall Findings
 	Our model identified 6,900 households with the highest propensity to become first-time donors to the Machen Florida Opportunity Scholarship (MFOS). A household was required to have a donation history with MFOS in order to be marked as a success case in the model’s training data, so these 6,900 households represent false positives identified by the model. Despite this, they are the desired contact group. 
