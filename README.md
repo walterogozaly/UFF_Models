@@ -1,12 +1,20 @@
 UF Foundation Modeling Team
 
-Walter Ogozaly	Maria Arias		Alexander Real	Madison Kaplan
+Walter Ogozaly	
 
-Data Description
-UF Advancement Click Data	5.35 MB
+Maria Arias
+
+Alexander Real
+
+Madison Kaplan
+
+### Data Description
+
+#### UF Advancement Click Data	5.35 MB
+
 This data is in Excel format and grouped weekly. It includes the date of any donor household’s first and last visits to our website as well as the total number of visits. Only about 20,000 households out of ~500,000 have made a recorded website visit. The model will import any spreadsheets that fit the click data’s naming convention so any new weekly files can be simply dropped in the relevant folder.
 
-Demographic and Alumni data (Joined_Export_*)	732 MB
+#### Demographic and Alumni data (Joined_Export_*)	732 MB
 
 	The bulk of our data, representing roughly 500,000 alum households, of which half have donated to UF. This data includes demographics (income/region/sex/married) as well as information related to alum activities and past donations. 
 
