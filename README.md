@@ -28,18 +28,17 @@ Our code is available on Github (https://github.com/walter97/UFF_Models), but si
 
 #### Model Versions
 ##### MODEL 1.1 	First logistic regression for madeDonationLastMonth
-Included independent variables weeksSinceLastDonation, weeksSinceFirstDonation, and GIFT_COUNT. 
-Very simple, yielded no relevant results.
+- Included independent variables weeksSinceLastDonation, weeksSinceFirstDonation, and GIFT_COUNT. 
 
 ##### MODEL 1.2 	Logistic regression for variable reduction
-This was the first model to include all variables intended for the final product.
-In conjunction with a confusion matrix and our Model 1.3 random forest importance chart, this logistic regression was used to identify variables for elimination.
-Built after Model 1.3, but logically a precursor. 
+- This was the first model to include all variables intended for the final product.
+- In conjunction with a confusion matrix and our Model 1.3 random forest importance chart, this logistic regression was used to identify variables for elimination.
+- Built after Model 1.3, but logically a precursor. 
 
 ##### MODEL 1.3 	Regression, Decision Tree, and RM on madeDonationLastMonth
-First models to use SMOTE, k-fold cross validation, and centering/scaling of data.
-High correlation between variables diminished these models’ effectiveness.
-RM model still yielded valuable results for variable reduction in Model 1.2.
+- First models to use SMOTE, k-fold cross validation, and centering/scaling of data.
+- High correlation between variables diminished these models’ effectiveness.
+- RM model still yielded valuable results for variable reduction in Model 1.2.
 
 ##### MODEL 2.1	Regression, Decision Tree, and RM on likelyToDonateThisMonth
 - The random forest ran on only half the training data (split on the dependent variable) due to machine limitations. This was still ~180k observations.
@@ -47,4 +46,4 @@ RM model still yielded valuable results for variable reduction in Model 1.2.
 - All three models yielded significant results with high accuracy.  
 
 ##### FINAL MODEL	Decision tree predicting likelyToDonateThisMonth
-This model had the highest accuracy of predicting likelyToDonateThisMonth, accompanied by the highest TP and lowest FN rates.
+- This model had the highest accuracy of predicting likelyToDonateThisMonth, accompanied by the highest TP and lowest FN rates.
