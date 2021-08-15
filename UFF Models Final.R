@@ -733,16 +733,12 @@ dataForModelScaled <- merge(x=dataForModelScaled, y=myDataDummied, by="ID_NUMBER
 
 dataForCorrelation = dataForModelScaled
 
-# If two variables have too much correlation, I compare their p-value
-# and remove the less important one.
 removedForCor = c("GIFT_MR1", "LONGEST_CONSECUTIVE_STREAK",
   "GIFT_MR9", "ANY_EMP", "FIRST_AMOUNT", "TOTALUF", "MFOS_FIRST_AMOUNT",
   "donated2020")
 
 #removedForNotInt = c("likelyToDonateThisMonth","noDonationYet")
 
-# If the p-value is miserable or the random forest model said it was
-# unimportant, it's removed below.
 removedForUnimportance = c("VARSPORT", "CHILDALUM", "CREDCARD",
   "GATRTAG", "ETHNALUM", "EVENT", "EMAIL", "UF_EMP", "UFF_BRD",
   "SEC_HOME", "FFF", "LIFEMEM", "madeDonationLastMonth",
@@ -797,8 +793,6 @@ donationDependent = c("ADJ_AM1STGT", "CURCONSEC", "VELOCITY", "RFM_SCORE",
 # the ALL DONORS model.
 #donationDependent = c()
 
-# These were the least predictive variables on our final random forest model
-# run. (Regarding our first time donor model).
 finalRFremoved = c("REGION_Polk", "HIGHEST_HH_RATING_H - $500,000 - $999,999",
   "REGION_Panama City", "REGION_Ocala", "MARSTAT_Divorced", "RECCONTACT_7 to 11 months",
   "AGE_CAT_76-80", "REGION_Miami", "REGION_Ft. Lauderdale", "REGION_Orlando",
